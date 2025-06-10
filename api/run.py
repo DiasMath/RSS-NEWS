@@ -8,13 +8,13 @@ import pandas as pd
 import traceback
 
 # ============================
-# COLE AQUI suas credenciais
+# Credenciais embutidas
 # ============================
 SERVICE_ACCOUNT_INFO = {
-    "type": "service_account",
-    "project_id": "rss-news-tracker",
-    "private_key_id": "80666e1d54c8d39def8d97740a4d9e62e607c80f",
-    "private_key": """-----BEGIN PRIVATE KEY-----
+  "type": "service_account",
+  "project_id": "rss-news-tracker",
+  "private_key_id": "80666e1d54c8d39def8d97740a4d9e62e607c80f",
+  "private_key": """-----BEGIN PRIVATE KEY-----
 MIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQDCJQzbx+Uow616
 OrekOemeLbR3/3Tt7uHZcF8RPhIsd5BU62Yn6CY9kxhDdN2keCaiA6r4yJ5sw31C
 EKf7rKxv44h86WN3j3MlwF4xJ1fT7anAlZlOTurGnJWgdmvbRnpPVxqDD8nBLXUn
@@ -42,12 +42,12 @@ D001Fp0sprVKPuCJnsaOCXzqbO+zJMxP0BWDpvlZSgyvKEPsQ0Jpx2gASZk4xC8q
 J5oLWVcP7KpKZULhEUT7Wa4/yQCntbUspuXIqqClHWHo1x2wDVgm9NnPPdLqFZbg
 n877BbUulbUg/A5ftSyL+xGj8A==
 -----END PRIVATE KEY-----\n""",
-    "client_email": "leitor-de-rss@rss-news-tracker.iam.gserviceaccount.com",
-    "client_id": "110422821286528792366",
-    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-    "token_uri": "https://oauth2.googleapis.com/token",
-    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-    "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/leitor-de-rss%40rss-news-tracker.iam.gserviceaccount.com"
+  "client_email": "leitor-de-rss@rss-news-tracker.iam.gserviceaccount.com",
+  "client_id": "110422821286528792366",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/leitor-de-rss%40rss-news-tracker.iam.gserviceaccount.com"
 }
 
 SCOPES               = ['https://www.googleapis.com/auth/spreadsheets']
@@ -63,48 +63,38 @@ service = build('sheets', 'v4', credentials=creds).spreadsheets()
 def load_source_mapping():
     resp   = service.values().get(spreadsheetId=SPREADSHEET_ID,
                                   range=SOURCE_MAPPING_RANGE).execute()
-    values = resp.get('values', [])
-    return {row[0].lower(): row[1] for row in values if len(row) >= 2}
+    return {row[0].lower(): row[1] for row in resp.get('values', []) if len(row) >= 2}
 
 def load_topic_mapping():
     resp   = service.values().get(spreadsheetId=SPREADSHEET_ID,
                                   range=TOPIC_MAPPING_RANGE).execute()
-    values = resp.get('values', [])
     mapping = []
-    for row in values:
+    for row in resp.get('values', []):
         if len(row) >= 2:
             terms = [t.strip().lower() for t in row[0].split(',') if t.strip()]
             mapping.append((terms, row[1]))
     return mapping
 
-def categorize_source(text, source_map):
+def categorize_source(text, src_map):
     low = text.lower()
-    for de, para in source_map.items():
-        if de in low:
-            return para
-    return "No match"
+    return next((para for de, para in src_map.items() if de in low), "No match")
 
-def categorize_topic(text, topic_map):
+def categorize_topic(text, top_map):
     low = text.lower()
-    for terms, para in topic_map:
-        if any(de in low for de in terms):
-            return para
-    return "No match"
+    return next((para for terms, para in top_map if any(de in low for de in terms)), "No match")
 
-def parse_rss_feed(xml_string, source_map, topic_map):
+def parse_rss_feed(xml_string, src_map, top_map):
     root = ET.fromstring(xml_string)
     ch   = root.find('channel')
-    if ch is None:
-        return []
+    if ch is None: return []
     items = []
     for itm in ch.findall('item'):
-        title    = itm.findtext('title', default="")
-        link     = itm.findtext('link', default="")
-        raw_date = itm.findtext('pubDate', default="")
+        title    = itm.findtext('title', "")
+        link     = itm.findtext('link', "")
+        raw_date = itm.findtext('pubDate', "")
         if raw_date:
             try:
-                dt_utc = parsedate_to_datetime(raw_date)
-                dt_sp  = dt_utc.astimezone(ZoneInfo("America/Sao_Paulo"))
+                dt_sp = parsedate_to_datetime(raw_date).astimezone(ZoneInfo("America/Sao_Paulo"))
                 formatted_date = dt_sp.strftime('%Y-%m-%d %H:%M:%S')
             except:
                 formatted_date = raw_date
@@ -114,8 +104,8 @@ def parse_rss_feed(xml_string, source_map, topic_map):
         items.append({
             'Título':             title,
             'Data de publicação': formatted_date,
-            'Fonte':              categorize_source(raw, source_map),
-            'Categoria':          categorize_topic(raw, topic_map),
+            'Fonte':              categorize_source(raw, src_map),
+            'Categoria':          categorize_topic(raw, top_map),
             'URL':                link,
             'Prioridade':         "Não definida",
             'Status':             "Não definido"
@@ -128,33 +118,28 @@ def read_rss_urls():
     return [row[0] for row in resp.get('values', []) if row]
 
 def write_results(df: pd.DataFrame):
-    values = [df.columns.tolist()] + df.values.tolist()
-    body   = {'values': values}
+    vals = [df.columns.tolist()] + df.values.tolist()
     service.values().clear(spreadsheetId=SPREADSHEET_ID,
                            range=RESULTS_RANGE_START).execute()
-    service.values().update(
-        spreadsheetId=SPREADSHEET_ID,
-        range=RESULTS_RANGE_START,
-        valueInputOption='USER_ENTERED',
-        body=body
-    ).execute()
+    service.values().update(spreadsheetId=SPREADSHEET_ID,
+                            range=RESULTS_RANGE_START,
+                            valueInputOption='USER_ENTERED',
+                            body={'values': vals}).execute()
 
 def main():
     src_map = load_source_mapping()
     top_map = load_topic_mapping()
-    urls    = read_rss_urls()
     all_items = []
-    for url in urls:
+    for url in read_rss_urls():
         resp = requests.get(url, timeout=10); resp.raise_for_status()
         all_items.extend(parse_rss_feed(resp.text, src_map, top_map))
     if all_items:
-        df = pd.DataFrame(all_items)
-        write_results(df)
+        write_results(pd.DataFrame(all_items))
 
 def handler(request):
     try:
         main()
-        return { 'statusCode': 200, 'body': '✅ Concluído com sucesso.' }
+        return { 'statusCode': 200, 'body': '✅ OK' }
     except Exception:
         tb = traceback.format_exc()
         return { 'statusCode': 500, 'body': f'❌ Erro interno:\n\n{tb}' }

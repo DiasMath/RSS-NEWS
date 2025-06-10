@@ -1,6 +1,10 @@
 {
+  "version": 2,
   "builds": [
     { "src": "api/run.py", "use": "@vercel/python" },
     { "src": "index.html", "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "src": "/api/run", "dest": "/api/run.py" }
   ]
 }
