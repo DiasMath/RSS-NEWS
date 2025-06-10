@@ -1,4 +1,4 @@
-requests
-google-api-python-client
-google-auth
-pandas
+requests==2.31.0
+pandas==2.0.3
+google-api-python-client==2.94.0
+google-auth==2.23.0
