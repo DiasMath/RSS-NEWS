@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Executar RSS</title>
+  <style>
+    body { font-family: sans-serif; padding: 2rem; }
+    #output { white-space: pre-wrap; margin-top: 1rem; border: 1px solid #ddd; padding: 1rem; }
+    button { padding: 0.5rem 1rem; font-size: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>Leitor de RSS</h1>
+  <button id="run">Executar código</button>
+  <div id="output"></div>
+
+  <script>
+    document.getElementById("run").addEventListener("click", () => {
+      const out = document.getElementById("output");
+      out.textContent = "Executando...";
+      fetch('/api/run')
+        .then(async res => {
+          const text = await res.text();
+          out.textContent = `Status: ${res.status}\n\n${text}`;
+        })
+        .catch(err => {
+          out.textContent = `Erro de rede:\n${err}`;
+        });
+    });
+  </script>
+</body>
+</html>
