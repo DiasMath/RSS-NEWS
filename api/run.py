@@ -1,3 +1,4 @@
+from flask import Flask, Response
 import requests
 import xml.etree.ElementTree as ET
 from email.utils import parsedate_to_datetime
@@ -6,6 +7,8 @@ from googleapiclient.discovery import build
 from google.oauth2.service_account import Credentials
 import pandas as pd
 import traceback
+
+app = Flask(__name__)
 
 # ============================
 # Credenciais embutidas
@@ -57,17 +60,18 @@ SOURCE_MAPPING_RANGE = 'DeParaFontes!A2:B'
 TOPIC_MAPPING_RANGE  = 'DeParaTopicos!A2:B'
 RESULTS_RANGE_START  = 'Resultados!A1'
 
+# inicializa Google Sheets API
 creds   = Credentials.from_service_account_info(SERVICE_ACCOUNT_INFO, scopes=SCOPES)
 service = build('sheets', 'v4', credentials=creds).spreadsheets()
 
 def load_source_mapping():
-    resp   = service.values().get(spreadsheetId=SPREADSHEET_ID,
-                                  range=SOURCE_MAPPING_RANGE).execute()
+    resp = service.values().get(spreadsheetId=SPREADSHEET_ID,
+                                range=SOURCE_MAPPING_RANGE).execute()
     return {row[0].lower(): row[1] for row in resp.get('values', []) if len(row) >= 2}
 
 def load_topic_mapping():
-    resp   = service.values().get(spreadsheetId=SPREADSHEET_ID,
-                                  range=TOPIC_MAPPING_RANGE).execute()
+    resp = service.values().get(spreadsheetId=SPREADSHEET_ID,
+                                range=TOPIC_MAPPING_RANGE).execute()
     mapping = []
     for row in resp.get('values', []):
         if len(row) >= 2:
@@ -86,7 +90,8 @@ def categorize_topic(text, top_map):
 def parse_rss_feed(xml_string, src_map, top_map):
     root = ET.fromstring(xml_string)
     ch   = root.find('channel')
-    if ch is None: return []
+    if ch is None:
+        return []
     items = []
     for itm in ch.findall('item'):
         title    = itm.findtext('title', "")
@@ -102,13 +107,13 @@ def parse_rss_feed(xml_string, src_map, top_map):
             formatted_date = ""
         raw = ET.tostring(itm, encoding='unicode')
         items.append({
-            'Título':             title,
+            'Título': title,
             'Data de publicação': formatted_date,
-            'Fonte':              categorize_source(raw, src_map),
-            'Categoria':          categorize_topic(raw, top_map),
-            'URL':                link,
-            'Prioridade':         "Não definida",
-            'Status':             "Não definido"
+            'Fonte': categorize_source(raw, load_source_mapping()),
+            'Categoria': categorize_topic(raw, load_topic_mapping()),
+            'URL': link,
+            'Prioridade': "Não definida",
+            'Status': "Não definido"
         })
     return items
 
@@ -136,10 +141,14 @@ def main():
     if all_items:
         write_results(pd.DataFrame(all_items))
 
-def handler(request):
+@app.route('/api/run', methods=['GET'])
+def run_endpoint():
     try:
         main()
-        return { 'statusCode': 200, 'body': '✅ OK' }
+        return Response("✅ OK", status=200)
     except Exception:
         tb = traceback.format_exc()
-        return { 'statusCode': 500, 'body': f'❌ Erro interno:\n\n{tb}' }
+        return Response(f"❌ Erro interno:\n\n{tb}", status=500)
+
+if __name__ == '__main__':
+    app.run()
